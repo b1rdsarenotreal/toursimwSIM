@@ -4178,6 +4178,12 @@ function buildQualEntryForm(t, m){
     setRow.appendChild(box);
     setInputs.push({a, b});
   }
+  const simBtn = el("button", {type:"button", class:"btn btn-small btn-ghost sim-btn", title:"Simulate a result for this match"}, ["SIM"]);
+  simBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    simulateAndPersistMatch(t, m, "qual");
+  });
+  setRow.appendChild(simBtn);
   form.appendChild(setRow);
 
   const errMsg = el("div", {class:"form-msg"}, []);
