@@ -4771,8 +4771,8 @@ function buildSlotRow(slot, m, which, t){
 
 /* ---------------- Match Simulator ---------------- */
 // Tunable knobs — easy to retune later without touching the formulas below.
-const SIM_RANK_ELO_SCALE = 50;         // bigger = rank gaps matter less
-const SIM_SURFACE_SCALE = 80;          // converts a surface win% delta into an equivalent rank-shift
+const SIM_POINTS_ELO_SCALE = 2.5;      // operates on log10(points) — bigger = points gaps matter less
+const SIM_SURFACE_SCALE = 1.2;         // converts a surface win% delta into an equivalent log-points shift
 const SIM_H2H_SCALE = 0.5;             // how much the head-to-head delta can shift the final probability
 const SIM_MIN_PROB = 0.03;             // nobody is ever a true lock...
 const SIM_MAX_PROB = 0.97;             // ...or a true impossibility
@@ -4786,35 +4786,35 @@ function simConfidence(n, k){
   return n / (n + k);
 }
 
-// A player's "effective rank" for simulation purposes blends their current
-// rank with their career-best rank, weighted by how recently that peak
-// happened — a peak from a few months ago (most likely rust from a layoff,
-// not real decline) pulls hard toward itself; an old peak fades back toward
-// mostly just current rank, though it never fully disappears.
-function computeEffectiveRatingForSim(playerId, asOfMs){
-  const asOfWeek = mondayOf(asOfMs);
-  const currentRankMap = officialRanksAsOf(asOfWeek);
-  const totalRanked = Object.keys(currentRankMap).length;
-  // An unranked player still needs a number to simulate against — treat
-  // them as sitting just past the bottom of the current ranked field.
-  const currentRank = currentRankMap[playerId] || (totalRanked + 50);
+// A player's "effective points" for simulation purposes blends their
+// current ranking points with their career-best points total, weighted by
+// how recently that peak happened — a peak from a few months ago (most
+// likely rust from a layoff, not real decline) pulls hard toward itself;
+// an old peak fades back toward mostly just current points, though it
+// never fully disappears. Points, not rank — rank is only an ordering, so
+// two players 60 spots apart in the crowded middle of the field can be a
+// tiny handful of points apart (one extra tournament round), while two
+// players just a few spots apart at the very top can be thousands of
+// points apart. Points capture how big that gap actually is; rank alone
+// can't tell the two situations apart.
+function computeEffectivePointsForSim(playerId, asOfMs){
+  const effectiveNow = asOfMs - 7 * MS_PER_DAY; // matches officialRanksAsOf's own lag convention
+  const currentPoints = (computeRankingsAsOf(effectiveNow).get(playerId) || {points:0}).points;
 
-  let peakRank = null, peakDateMs = null;
+  let peakPoints = currentPoints, peakDateMs = asOfMs;
   getRankingSnapshotDates().forEach(d => {
     if(d > asOfMs) return; // never let a simulation see a future peak
-    const rankMap = officialRanksAsOf(d);
-    const r = rankMap[playerId];
-    if(r && (peakRank === null || r < peakRank)){
-      peakRank = r;
+    const pts = (computeRankingsAsOf(d - 7 * MS_PER_DAY).get(playerId) || {points:0}).points;
+    if(pts > peakPoints){
+      peakPoints = pts;
       peakDateMs = d;
     }
   });
-  if(peakRank === null) return currentRank; // never been ranked at all yet
+  if(peakPoints <= currentPoints) return currentPoints; // no peak above current -- nothing to blend
 
   const monthsSincePeak = Math.max(0, (asOfMs - peakDateMs) / (30 * MS_PER_DAY));
   const peakWeight = Math.pow(0.5, monthsSincePeak / SIM_PEAK_HALF_LIFE_MONTHS);
-  const betterOfPeakAndCurrent = Math.min(peakRank, currentRank);
-  return currentRank + peakWeight * (betterOfPeakAndCurrent - currentRank);
+  return currentPoints + peakWeight * (peakPoints - currentPoints);
 }
 
 // How much better or worse a player performs on this surface than their
@@ -4869,38 +4869,42 @@ function computeH2HAdjustmentForSim(idA, idB){
   return delta * simConfidence(total, 4);
 }
 
-// Full pipeline: effective rank (current blended with recency-weighted
-// peak) -> adjusted by each player's own surface form -> converted to a
-// base win probability via an Elo-style curve on the rank gap -> nudged
+// Full pipeline: effective points (current blended with recency-weighted
+// peak) -> compared on a log10 scale, so a doubling of points means the
+// same thing whether it's 100 vs 200 or 4000 vs 8000, rather than a flat
+// point gap meaning wildly different things depending on where on the
+// scale it sits -> adjusted by each player's own surface form -> nudged
 // by head-to-head -> clamped so nothing is ever a true lock.
 function simulateMatchProbability(idA, idB, surface, asOfMs){
-  const rankA = computeEffectiveRatingForSim(idA, asOfMs);
-  const rankB = computeEffectiveRatingForSim(idB, asOfMs);
+  const pointsA = computeEffectivePointsForSim(idA, asOfMs);
+  const pointsB = computeEffectivePointsForSim(idB, asOfMs);
   const surfAdjA = computeSurfaceAdjustmentForSim(idA, surface, asOfMs) * SIM_SURFACE_SCALE;
   const surfAdjB = computeSurfaceAdjustmentForSim(idB, surface, asOfMs) * SIM_SURFACE_SCALE;
-  // A positive surface adjustment (better than their own baseline) should
-  // improve effective rank — i.e. lower the rank number.
-  const adjRankA = rankA - surfAdjA;
-  const adjRankB = rankB - surfAdjB;
-  const baseProb = 1 / (1 + Math.pow(10, (adjRankA - adjRankB) / SIM_RANK_ELO_SCALE));
+  // +1 avoids log10(0) for a player with no points at all yet.
+  const logA = Math.log10(pointsA + 1) + surfAdjA;
+  const logB = Math.log10(pointsB + 1) + surfAdjB;
+  const baseProb = 1 / (1 + Math.pow(10, (logB - logA) / SIM_POINTS_ELO_SCALE));
   const h2hAdj = computeH2HAdjustmentForSim(idA, idB) * SIM_H2H_SCALE;
   return Math.min(SIM_MAX_PROB, Math.max(SIM_MIN_PROB, baseProb + h2hAdj));
 }
 
 // Picks a realistic game score for one set, given how likely the actual set
-// winner was to win it (>= 0.5) — a close matchup skews toward tight scores
-// (7-6, 7-5), a lopsided one skews toward routine or blowout ones.
+// winner was to win it (>= 0.5). Real tennis sets are usually decided by a
+// single break of serve — 6-4/6-3 are the most common scores even in
+// genuinely competitive matches, since reaching 5-5 or 6-6 requires BOTH
+// players holding serve the whole way, which isn't the typical path even
+// when the match itself is close. 7-6 and 7-5 are real outcomes, not the
+// default ones. Blends a "close match" weight table with a "lopsided
+// match" one, based on how close this particular set's winner actually
+// was to a coin flip.
 function pickSimSetScore(setWinnerProb){
   const closeness = 1 - Math.abs(setWinnerProb - 0.5) * 2; // 1 = coin flip, 0 = total lock
-  const options = [
-    {score:[7,6], weight: 0.15 + closeness * 0.35},
-    {score:[7,5], weight: 0.15 + closeness * 0.25},
-    {score:[6,4], weight: 0.30},
-    {score:[6,3], weight: 0.10 + (1 - closeness) * 0.20},
-    {score:[6,2], weight: (1 - closeness) * 0.15},
-    {score:[6,1], weight: (1 - closeness) * 0.08},
-    {score:[6,0], weight: (1 - closeness) * 0.04}
-  ];
+  const closeWeights =    {"7-6":0.15, "7-5":0.15, "6-4":0.30, "6-3":0.20, "6-2":0.12, "6-1":0.06, "6-0":0.02};
+  const lopsidedWeights = {"7-6":0.02, "7-5":0.03, "6-4":0.10, "6-3":0.20, "6-2":0.30, "6-1":0.25, "6-0":0.10};
+  const options = Object.keys(closeWeights).map(key => {
+    const [a,b] = key.split("-").map(Number);
+    return {score:[a,b], weight: closeness * closeWeights[key] + (1 - closeness) * lopsidedWeights[key]};
+  });
   const total = options.reduce((s,o) => s + o.weight, 0);
   let r = Math.random() * total;
   for(const o of options){
@@ -4985,12 +4989,6 @@ function buildBracketMatchCard(t, m){
       openH2HPopup(m.slotA.playerId, m.slotB.playerId);
     });
     card.appendChild(h2hBtn);
-    const simBtn = el("button", {type:"button", class:"btn btn-small btn-ghost sim-btn", title:"Simulate a result for this match"}, ["Simulate"]);
-    simBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      simulateAndPersistMatch(t, m, "main");
-    });
-    card.appendChild(simBtn);
   }
 
   if(m.status === "ready"){
@@ -5031,12 +5029,6 @@ function buildBronzeMatchCard(t, m){
       openH2HPopup(m.slotA.playerId, m.slotB.playerId);
     });
     card.appendChild(h2hBtn);
-    const simBtn = el("button", {type:"button", class:"btn btn-small btn-ghost sim-btn", title:"Simulate a result for this match"}, ["Simulate"]);
-    simBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      simulateAndPersistMatch(t, m, "main");
-    });
-    card.appendChild(simBtn);
   }
 
   if(m.status === "ready"){
@@ -5072,6 +5064,12 @@ function buildBracketEntryForm(t, m){
     setRow.appendChild(box);
     setInputs.push({a, b});
   }
+  const simBtn = el("button", {type:"button", class:"btn btn-small btn-ghost sim-btn", title:"Simulate a result for this match"}, ["SIM"]);
+  simBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    simulateAndPersistMatch(t, m, "main");
+  });
+  setRow.appendChild(simBtn);
   form.appendChild(setRow);
 
   const errMsg = el("div", {class:"form-msg"}, []);

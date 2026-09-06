@@ -1162,7 +1162,7 @@ form textarea{
 .name-link{cursor: pointer;}
 .name-link:hover{text-decoration: underline;}
 .bracket-match-form{padding: 7px; border-top: 1px dashed var(--line);}
-.bracket-sets-row{display:flex; gap:4px; margin-bottom:5px;}
+.bracket-sets-row{display:flex; align-items:flex-end; gap:4px; margin-bottom:5px;}
 .bracket-sets-row .set-box{width: 48px; padding: 3px;}
 .bracket-sets-row .set-box span{font-size:8px;}
 .bracket-sets-row .set-box input{padding:2px 2px; font-size:11px;}
