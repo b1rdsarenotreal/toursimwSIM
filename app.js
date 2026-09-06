@@ -4402,6 +4402,11 @@ function handleEntryListClick(e){
 // skips the very top (they'd be off resting/prepping for bigger events) in
 // favor of mid-pack and rising players. Bands are (maxRank, weight) pairs,
 // checked in order — the last one (Infinity) catches everyone else.
+// Generate Field won't pick anyone who hasn't actually played a match in
+// this many months, even if their points/ranking hasn't fully caught up
+// to reflect that inactivity yet.
+const FIELD_GEN_INACTIVITY_MONTHS = 3;
+
 const FIELD_GEN_WEIGHT_BANDS = {
   OLYMPICS: [{maxRank:20, weight:15}, {maxRank:50, weight:5}, {maxRank:100, weight:1}, {maxRank:Infinity, weight:0.1}],
   WTA1000: [{maxRank:30, weight:10}, {maxRank:60, weight:4}, {maxRank:100, weight:1}, {maxRank:Infinity, weight:0.2}],
@@ -4443,6 +4448,23 @@ function playersCommittedInWeek(weekMonday, excludeTournamentId){
   return committed;
 }
 
+// Most recent tournament date (at or before asOfMs) where this player
+// actually has a recorded match — used to keep Generate Field from
+// picking someone who's been inactive too long, even if their points
+// total (which only fades gradually over the full 52-week window) hasn't
+// dropped enough yet to reflect that they simply aren't playing.
+function getPlayerLastMatchDate(playerId, asOfMs){
+  let lastDate = null;
+  matchesForPlayer(playerId).forEach(m => {
+    const t = tournamentById(m.tournamentId);
+    if(!t) return;
+    const d = tournamentDateMs(t);
+    if(d > asOfMs) return;
+    if(lastDate === null || d > lastDate) lastDate = d;
+  });
+  return lastDate;
+}
+
 function handleGenerateField(){
   const t = tournamentById(currentBracketTournamentId);
   if(!t) return;
@@ -4460,12 +4482,23 @@ function handleGenerateField(){
   const directSlots = Math.max(0, t.drawSize - (qualEnabled ? t.qualifying.numQualifiers : 0));
   const target = directSlots + qualCap + Math.max(6, Math.round((directSlots + qualCap) * 0.15));
 
-  const eligible = state.players.filter(p =>
-    !p.retired &&
-    !committedElsewhere.has(p.id) &&
-    !alreadyOnList.has(p.id) &&
-    ranks[p.id]
-  );
+  // A player's points fade out gradually over the full 52-week rolling
+  // window, so someone who's actually stopped playing can still be sitting
+  // on a real ranking and real points for months after their last match —
+  // Generate Field shouldn't be treating them as an active part of the
+  // current field just because their points haven't caught up yet.
+  const tournamentDate = tournamentDateMs(t);
+  const inactivityCutoff = tournamentDate - FIELD_GEN_INACTIVITY_MONTHS * 30 * MS_PER_DAY;
+
+  const eligible = state.players.filter(p => {
+    if(p.retired) return false;
+    if(committedElsewhere.has(p.id)) return false;
+    if(alreadyOnList.has(p.id)) return false;
+    if(!ranks[p.id]) return false;
+    const lastMatch = getPlayerLastMatchDate(p.id, tournamentDate);
+    if(lastMatch === null || lastMatch < inactivityCutoff) return false;
+    return true;
+  });
 
   const picked = weightedSampleWithoutReplacement(eligible, (p) => fieldGenWeight(t.level, ranks[p.id]), Math.min(target, eligible.length));
   if(!t.entryList) t.entryList = [];
@@ -4474,7 +4507,7 @@ function handleGenerateField(){
 
   msg.className = "form-msg ok";
   msg.textContent = "Added " + picked.length + " player" + (picked.length===1?"":"s") + " to the entry list" +
-    (picked.length < target ? " (only " + eligible.length + " eligible players were available)" : "") + ".";
+    (picked.length < target ? " (only " + eligible.length + " eligible players were available — retired, already committed elsewhere, or not active in the last " + FIELD_GEN_INACTIVITY_MONTHS + " months)" : "") + ".";
   renderEntryListBody(t);
 }
 
