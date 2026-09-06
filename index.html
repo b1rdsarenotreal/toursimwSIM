@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fortnight — Alt-Universe WATP Tour</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap header-row">
+    <div class="brand">
+      <span class="brand-mark">●</span>
+      <div class="brand-text">
+        <h1>WATP TOUR</h1>
+        <p>an alternate-universe WATP tour</p>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-view="rankings">Rankings</button>
+      <button class="tab" data-view="players">Players</button>
+      <button class="tab" data-view="tournaments">Tournaments</button>
+      <div class="tab-dropdown" id="records-dropdown">
+        <button class="tab dropdown-toggle" id="records-dropdown-toggle" type="button">Records &#9662;</button>
+        <div class="dropdown-menu hidden" id="records-dropdown-menu">
+          <button class="tab dropdown-item" data-view="records">Overall Records</button>
+          <button class="tab dropdown-item" data-view="rank-history">Ranking History</button>
+          <button class="tab dropdown-item" data-view="slams">Slam History</button>
+          <button class="tab dropdown-item" data-view="thousands">WATP 1000 History</button>
+        </div>
+      </div>
+      <button class="tab" data-view="h2h">Head to Head</button>
+    </nav>
+    <div class="picker-wrap" id="global-search-wrap">
+      <input type="text" class="picker-input" id="global-search-input" placeholder="Search players &amp; tournaments…" autocomplete="off">
+      <div class="picker-suggestions hidden" id="global-search-suggestions"></div>
+    </div>
+    <button class="btn btn-ghost header-points-config" id="open-points-config" title="Edit the points system">&#9881; Points</button>
+    <button class="btn btn-primary header-add-player" id="header-add-player">+ Add Player</button>
+  </div>
+  <div class="brand-bar"></div>
+</header>
+
+<main class="wrap">
+
+  <!-- RANKINGS -->
+  <section class="view" id="view-rankings">
+    <div class="view-head">
+      <h2>Tour Rankings</h2>
+      <div class="controls">
+        <div class="mode-toggle" id="rankings-mode-toggle">
+          <button class="mode-btn active" data-rankings-mode="live">Live</button>
+          <button class="mode-btn" data-rankings-mode="official">Official</button>
+        </div>
+        <label>Search
+          <input type="text" id="rankings-search" placeholder="Find a player…" autocomplete="off">
+        </label>
+        <label>Rankings
+          <select id="rankings-year"></select>
+        </label>
+      </div>
+    </div>
+    <p class="rankings-rule-note" id="rankings-rule-note"></p>
+    <div id="rankings-empty" class="empty hidden">
+      <p>No points on the board yet.</p>
+      <p class="empty-sub">Add players and tournaments, then enter a result to seed the rankings.</p>
+    </div>
+    <div id="rankings-search-empty" class="empty hidden">
+      <p>No players match that search.</p>
+    </div>
+    <table class="data-table" id="rankings-table">
+      <thead>
+        <tr><th class="rank-col">Rank</th><th></th><th>Player</th><th>Country</th><th>Titles</th><th>Points</th></tr>
+      </thead>
+      <tbody id="rankings-body"></tbody>
+    </table>
+  </section>
+
+  <!-- PLAYERS -->
+  <section class="view hidden" id="view-players">
+    <div class="view-head">
+      <h2>Players</h2>
+      <div class="controls">
+        <button class="btn btn-ghost" id="open-bulk-add">Bulk Add</button>
+        <button class="btn btn-primary" id="open-add-player">+ Add Player</button>
+      </div>
+    </div>
+    <div id="players-empty" class="empty hidden">
+      <p>The tour has no players yet.</p>
+      <p class="empty-sub">Add the first one to get started.</p>
+    </div>
+    <div class="player-grid" id="players-grid"></div>
+
+    <div id="retired-section" class="hidden">
+      <div class="bracket-section-title">
+        <h3>Retired Players</h3>
+      </div>
+      <div class="player-grid" id="retired-players-grid"></div>
+    </div>
+  </section>
+
+  <!-- TOURNAMENTS -->
+  <section class="view hidden" id="view-tournaments">
+    <div class="view-head">
+      <h2>Tournaments</h2>
+      <div class="controls">
+        <label>Year
+          <select id="tournaments-year-filter"></select>
+        </label>
+        <button class="btn btn-ghost" id="open-add-bye-week">+ Add Bye Week</button>
+        <button class="btn btn-primary" id="open-add-tournament">+ Add Tournament</button>
+      </div>
+    </div>
+    <div id="tournaments-empty" class="empty hidden">
+      <p>No events scheduled.</p>
+      <p class="empty-sub">Add a tournament, then log results for it.</p>
+    </div>
+    <div id="tournaments-list"></div>
+  </section>
+
+  <!-- RECORDS -->
+  <section class="view hidden" id="view-records">
+    <div class="view-head">
+      <h2>Tour Records</h2>
+    </div>
+    <div id="records-empty" class="empty hidden">
+      <p>No history yet.</p>
+      <p class="empty-sub">Records fill in once results start coming in.</p>
+    </div>
+    <div id="records-body">
+      <div class="records-grid">
+        <div class="record-panel" id="record-weeks-no1">
+          <h3>Most Weeks at No. 1</h3>
+          <div class="record-list"></div>
+        </div>
+        <div class="record-panel" id="record-weeks-top10">
+          <h3>Most Weeks in the Top 10</h3>
+          <div class="record-list"></div>
+        </div>
+        <div class="record-panel" id="record-titles-overall">
+          <h3>Most Titles (Overall)</h3>
+          <div class="record-list"></div>
+        </div>
+        <div class="record-panel" id="record-win-streak">
+          <h3>Longest Win Streak</h3>
+          <div class="record-list"></div>
+        </div>
+        <div class="record-panel" id="record-top10-wins">
+          <h3>Most Top 10 Wins</h3>
+          <div class="record-list"></div>
+        </div>
+      </div>
+
+      <div class="bracket-section-title"><h3>Most Titles by Level</h3></div>
+      <div class="records-grid" id="record-titles-by-level"></div>
+    </div>
+  </section>
+
+  <!-- GRAND SLAM HISTORY -->
+  <section class="view hidden" id="view-slams">
+    <div class="view-head">
+      <h2>Grand Slam History</h2>
+      <button class="btn btn-ghost" id="open-add-slam-history">+ Add Historical Record</button>
+    </div>
+    <p class="rankings-rule-note">Career Grand Slam appearances — reaching a later round always counts toward the earlier ones too (a finalist has also reached the quarterfinal and semifinal that trip). Numbers with a <span class="hist-marker">*</span> include manually-added history from before this tracker existed (Total only — historical entries aren't broken down by major).</p>
+
+    <div class="mode-toggle" id="slam-filter-toggle"></div>
+
+    <div id="slams-empty" class="empty hidden">
+      <p>No Grand Slam results yet.</p>
+      <p class="empty-sub">This fills in once results start coming in for a Grand Slam-level tournament.</p>
+    </div>
+    <table class="data-table" id="slams-table">
+      <thead>
+        <tr id="slams-thead-row"><th>#</th><th>Player</th><th>Country</th><th data-slam-sort-col="QF" class="sortable-th">QF</th><th data-slam-sort-col="SF" class="sortable-th">SF</th><th data-slam-sort-col="F" class="sortable-th">F</th><th data-slam-sort-col="W" class="sortable-th">Titles</th><th></th></tr>
+      </thead>
+      <tbody id="slams-body"></tbody>
+    </table>
+  </section>
+
+  <section class="view hidden" id="view-thousands">
+    <div class="view-head">
+      <h2>WATP 1000 History</h2>
+    </div>
+    <p class="rankings-rule-note">Career WATP 1000 appearances — reaching a later round always counts toward the earlier ones too (a finalist has also reached the quarterfinal and semifinal that trip).</p>
+
+    <div class="mode-toggle mode-toggle-1000" id="thousands-filter-toggle"></div>
+
+    <div id="thousands-empty" class="empty hidden">
+      <p>No WATP 1000 results yet.</p>
+      <p class="empty-sub">This fills in once results start coming in for a WATP 1000-level tournament.</p>
+    </div>
+    <table class="data-table" id="thousands-table">
+      <thead>
+        <tr id="thousands-thead-row"><th>#</th><th>Player</th><th>Country</th><th data-thousands-sort-col="QF" class="sortable-th">QF</th><th data-thousands-sort-col="SF" class="sortable-th">SF</th><th data-thousands-sort-col="F" class="sortable-th">F</th><th data-thousands-sort-col="W" class="sortable-th">Titles</th></tr>
+      </thead>
+      <tbody id="thousands-body"></tbody>
+    </table>
+  </section>
+
+  <section class="view hidden" id="view-rank-history">
+    <div class="view-head">
+      <h2>Ranking History</h2>
+    </div>
+    <p class="rankings-rule-note">Full career ranking records — not just the top 10 shown on the main Records page.</p>
+
+    <div class="bracket-section-title"><h3>Most Weeks at No. 1</h3></div>
+    <div class="record-list" id="rh-weeks-no1-list"></div>
+
+    <div class="bracket-section-title"><h3>Most Weeks in the Top 10</h3></div>
+    <div class="record-list" id="rh-weeks-top10-list"></div>
+
+    <div class="bracket-section-title"><h3>The No. 1 Ranking — Full History</h3></div>
+    <p class="rankings-rule-note">Every stint at No. 1, in order. "Total" is that player's cumulative career weeks at No. 1 as of that stint, not just this one.</p>
+    <div id="rh-no1-empty" class="empty hidden">
+      <p>No one has reached No. 1 yet.</p>
+    </div>
+    <table class="data-table" id="rh-no1-table">
+      <thead>
+        <tr><th>No.</th><th>Player</th><th>Start date</th><th>End date</th><th>Weeks</th><th>Total</th></tr>
+      </thead>
+      <tbody id="rh-no1-body"></tbody>
+    </table>
+  </section>
+
+  <!-- HEAD TO HEAD -->
+  <section class="view hidden" id="view-h2h">
+    <div class="view-head">
+      <h2>Head to Head</h2>
+      <div class="controls">
+        <label>Player A
+          <div class="picker-wrap" id="h2h-picker-a"></div>
+        </label>
+        <label>Player B
+          <div class="picker-wrap" id="h2h-picker-b"></div>
+        </label>
+      </div>
+    </div>
+    <div id="h2h-empty" class="empty">
+      <p>Pick two players to see their head-to-head record.</p>
+    </div>
+    <div id="h2h-body" class="hidden"></div>
+  </section>
+
+  <!-- TOURNAMENT HISTORY (drill-down from Tournaments, not a top-level tab) -->
+  <section class="view hidden" id="view-tourney-history">
+    <button class="btn btn-ghost back-btn" id="tourney-history-back">&larr; Back to Tournaments</button>
+    <div class="view-head" id="tourney-history-head"></div>
+    <div id="tourney-history-body"></div>
+  </section>
+
+  <!-- BRACKET (drill-down from Tournaments, not a top-level tab) -->
+  <section class="view hidden" id="view-bracket">
+    <button class="btn btn-ghost back-btn" id="bracket-back">&larr; Back to Tournaments</button>
+    <div class="view-head" id="bracket-head"></div>
+
+    <div class="bracket-subnav" id="bracket-subnav">
+      <button class="subtab active" data-bracket-tab="draw">Draw</button>
+      <button class="subtab hidden" data-bracket-tab="qual" id="bracket-subnav-qual">Qualifying Draw</button>
+      <button class="subtab" data-bracket-tab="entry">Entry List</button>
+    </div>
+
+    <div class="bracket-subpage" id="bracket-subpage-draw">
+      <div id="normal-draw-heading">
+        <div class="bracket-section-title">
+          <h3>Seeds</h3>
+        </div>
+        <div id="seed-index" class="seed-index-grid"></div>
+      </div>
+
+      <div id="bracket-draw-container"></div>
+      <div id="finals-draw-container" class="hidden"></div>
+    </div>
+
+    <div class="bracket-subpage hidden" id="bracket-subpage-qual">
+      <div class="bracket-section-title">
+        <h3>Qualifying Draw</h3>
+      </div>
+      <div class="bracket-wrap" id="qual-bracket-wrap"></div>
+    </div>
+
+    <div class="bracket-subpage hidden" id="bracket-subpage-entry">
+    <div id="finals-entry-container" class="hidden"></div>
+    <div id="normal-entry-content">
+    <div class="bracket-section">
+      <div class="bracket-section-title">
+        <h3>Auto-Fill Field from Rankings</h3>
+      </div>
+      <p class="modal-help">Pick a ranking week to pull the field from, and (optionally) a different week to order the seeds by. Auto-fill only sets seeds/entrants that are currently empty — it won't overwrite anyone you've already placed by hand.</p>
+      <div class="field-row">
+        <label>Entry list as of
+          <select id="bracket-entry-date"></select>
+        </label>
+        <label>Seeding as of
+          <select id="bracket-seed-date"></select>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="bracket-autofill-main">Auto-Fill Main Draw</button>
+        <button class="btn btn-ghost" id="bracket-autofill-qual">Auto-Fill Qualifying</button>
+        <span class="form-msg" id="bracket-autofill-msg"></span>
+      </div>
+    </div>
+
+    <div class="bracket-section">
+      <div class="bracket-section-title">
+        <h3>Entry List</h3>
+      </div>
+      <p class="modal-help">Build the actual list of players who entered — mark any wild cards, then process it using the two dates above. Direct main-draw acceptances and qualifying acceptances are cut off by rank (as of the entry-list date) after wild cards are set aside; seeds among the main-draw field are then ordered using the seeding date. This only fills empty seed/entrant slots — anyone already placed by hand stays put.</p>
+      <div class="form-actions" style="margin-bottom:12px;">
+        <button class="btn btn-ghost" id="entry-list-generate">Generate Field</button>
+        <span class="form-msg" id="entry-list-generate-msg"></span>
+      </div>
+      <div id="entry-list-body"></div>
+      <div class="form-actions" style="margin-top:14px;">
+        <button class="btn btn-primary" id="entry-list-process">Process Entry List</button>
+        <span class="form-msg" id="entry-list-msg"></span>
+      </div>
+    </div>
+
+    <div class="bracket-section" id="qual-config-section">
+      <div class="bracket-section-title">
+        <h3>Qualifying Setup</h3>
+      </div>
+      <div class="field-row">
+        <label class="walkover-check">
+          <input type="checkbox" id="qual-enabled"> Include a qualifying draw
+        </label>
+        <label>Qualifiers to main draw
+          <select id="qual-numqualifiers">
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8" selected>8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12">12</option>
+            <option value="13">13</option>
+            <option value="14">14</option>
+            <option value="15">15</option>
+            <option value="16">16</option>
+          </select>
+        </label>
+        <label>Qualifying rounds
+          <select id="qual-numrounds">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="qual-body" class="hidden">
+        <div class="bracket-section-title"><h3>Qualifying Entrants</h3></div>
+        <p class="modal-help">Search and add players below.</p>
+        <div id="qual-entrants-list"></div>
+        <p class="fill-status" id="qual-fill-status"></p>
+        <div class="form-actions" style="margin-top:16px;">
+          <button class="btn btn-primary" id="qual-generate-draw">Generate Qualifying Draw</button>
+          <span class="form-msg" id="qual-generate-msg"></span>
+        </div>
+
+        <div class="form-actions" style="margin-top:8px;">
+          <button class="btn btn-primary" id="qual-add-to-main">Add Qualifiers to Main Draw</button>
+          <span class="form-msg" id="qual-add-msg"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bracket-section">
+      <div class="bracket-section-title">
+        <h3>Seeding</h3>
+      </div>
+      <p class="modal-help">Assign seed 1 through seed <span id="bracket-numseeds-label"></span>. Seeds 1 and 2 anchor opposite ends of the draw; the rest are drawn randomly within their pot (3–4, 5–8, 9–16…) so same-pot seeds can't meet early. Byes go to the top seeds automatically.</p>
+      <div id="bracket-seeds-list" class="bracket-seed-grid"></div>
+
+      <div class="bracket-section-title">
+        <h3>Unseeded Entrants</h3>
+      </div>
+      <p class="modal-help">Everyone else in the field. They'll be drawn at random into the remaining slots.</p>
+      <div id="bracket-unseeded-list"></div>
+      <p class="fill-status" id="bracket-fill-status"></p>
+
+      <div class="form-actions" style="margin-top:16px;">
+        <button class="btn btn-primary" id="bracket-generate-draw">Generate Draw</button>
+        <span class="form-msg" id="bracket-generate-msg"></span>
+      </div>
+    </div>
+
+    <div class="bracket-section">
+      <div class="bracket-section-title">
+        <h3>Manual Slot Overrides</h3>
+        <button class="btn btn-small" id="bracket-toggle-seed">Show / Hide</button>
+      </div>
+      <p class="modal-help">Fine-tune individual slots directly — useful for fixing a single slot without redrawing the whole bracket.</p>
+      <div id="bracket-seed-grid" class="bracket-seed-grid hidden"></div>
+    </div>
+    </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Player modal -->
+<div class="modal-backdrop hidden" id="player-modal-backdrop">
+  <div class="modal" id="player-modal"></div>
+</div>
+
+<!-- Lucky Loser picker -->
+<div class="modal-backdrop hidden" id="ll-modal-backdrop">
+  <div class="modal" id="ll-modal"></div>
+</div>
+
+<!-- Edit Grand Slam grid (manual pre-tracking entries) -->
+<div class="modal-backdrop hidden" id="edit-gs-grid-backdrop">
+  <div class="modal" id="edit-gs-grid-modal"></div>
+</div>
+
+<!-- Points system editor -->
+<div class="modal-backdrop hidden" id="points-config-backdrop">
+  <div class="modal points-config-modal" id="points-config-modal"></div>
+</div>
+
+<!-- Add player modal -->
+<div class="modal-backdrop hidden" id="add-player-backdrop">
+  <div class="modal">
+    <form id="add-player-form">
+      <h3>Add Player</h3>
+      <label>Full name
+        <input type="text" id="ap-name" required maxlength="60" placeholder="e.g. Naomi Callejas">
+      </label>
+      <label>Country code (2 or 3-letter, optional)
+        <input type="text" id="ap-country" maxlength="3" placeholder="e.g. ESP">
+      </label>
+      <p class="field-hint" id="ap-flag-preview"></p>
+      <div class="field-row">
+        <label>Plays
+          <select id="ap-hand">
+            <option value="R">Right-handed</option>
+            <option value="L">Left-handed</option>
+          </select>
+        </label>
+        <label>Turned pro (year, optional)
+          <input type="number" id="ap-turnedpro" min="1900" max="2200" placeholder="e.g. 2024">
+        </label>
+      </div>
+      <label>Height in cm (optional)
+        <input type="number" id="ap-height" min="120" max="230" placeholder="e.g. 175">
+      </label>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="ap-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Player</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit player modal -->
+<div class="modal-backdrop hidden" id="edit-player-backdrop">
+  <div class="modal">
+    <form id="edit-player-form">
+      <h3>Edit Player</h3>
+      <input type="hidden" id="ep-id">
+      <label>Full name
+        <input type="text" id="ep-name" required maxlength="60">
+      </label>
+      <label>Country code (2 or 3-letter, optional)
+        <input type="text" id="ep-country" maxlength="3">
+      </label>
+      <p class="field-hint" id="ep-flag-preview"></p>
+      <label>Effective date for any name/country change below
+        <input type="date" id="ep-change-date">
+      </label>
+      <p class="field-hint">Only used if the name or country above is actually different from what's on file — logged to their profile history, doesn't affect anything else.</p>
+      <div class="field-row">
+        <label>Plays
+          <select id="ep-hand">
+            <option value="R">Right-handed</option>
+            <option value="L">Left-handed</option>
+          </select>
+        </label>
+        <label>Turned pro (year, optional)
+          <input type="number" id="ep-turnedpro" min="1900" max="2200">
+        </label>
+      </div>
+      <label>Height in cm (optional)
+        <input type="number" id="ep-height" min="120" max="230">
+      </label>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="ep-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit tournament modal -->
+<div class="modal-backdrop hidden" id="edit-tournament-backdrop">
+  <div class="modal">
+    <form id="edit-tournament-form">
+      <h3>Edit Tournament</h3>
+      <input type="hidden" id="et-id">
+      <label>Name
+        <input type="text" id="et-name" required maxlength="60">
+      </label>
+      <label>Location <span style="text-transform:none; font-weight:400;">(optional)</span>
+        <input type="text" id="et-location" maxlength="80">
+      </label>
+      <div class="field-row">
+        <label>Level
+          <select id="et-level">
+            <option value="GRAND_SLAM">Grand Slam</option>
+            <option value="WTA1000">WATP 1000</option>
+            <option value="WTA500">WATP 500</option>
+            <option value="WTA250">WATP 250</option>
+            <option value="CHALLENGER125">WATP Challenger 125</option>
+            <option value="CHALLENGER100">WATP Challenger 100</option>
+            <option value="OLYMPICS">Summer Olympics</option>
+            <option value="FINALS">WATP Finals (Round Robin)</option>
+          </select>
+        </label>
+        <label>Surface
+          <select id="et-surface">
+            <option value="hard">Hard</option>
+            <option value="clay">Clay</option>
+            <option value="grass">Grass</option>
+          </select>
+        </label>
+      </div>
+      <label>Start date
+        <input type="date" id="et-date" required>
+      </label>
+      <label class="walkover-check">
+        <input type="checkbox" id="et-twoweeks">
+        Runs 2 weeks (no new rankings publish mid-event — flagship Slams/1000s)
+      </label>
+      <p class="modal-help">Draw size and qualifying settings are edited from the tournament's Bracket page.</p>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="et-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit historical slam record modal -->
+<div class="modal-backdrop hidden" id="edit-slam-history-backdrop">
+  <div class="modal">
+    <form id="edit-slam-history-form">
+      <h3>Historical Slam Record</h3>
+      <p class="modal-help">For appearances from before this tracker existed, or from outside this system entirely. These are purely additive — added on top of whatever's actually recorded here, and they never affect rankings or points, only what shows on this page. Add one row per major — it'll count toward both that major's own filter and Total.</p>
+      <label>Player
+        <div class="picker-wrap" id="esh-player-picker"></div>
+      </label>
+      <div id="esh-rows"></div>
+      <button type="button" class="btn btn-ghost btn-small" id="esh-add-row" style="margin-top:8px;">+ Add Major</button>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="esh-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Retire player modal -->
+<div class="modal-backdrop hidden" id="retire-player-backdrop">
+  <div class="modal">
+    <form id="retire-player-form">
+      <h3>Retire <span id="rp-player-name"></span></h3>
+      <input type="hidden" id="rp-player-id">
+      <p class="modal-help">They'll drop off the rankings from this date onward, but stay exactly as they were in any week's rankings before it — nothing about their past results changes.</p>
+      <label>Retirement date
+        <input type="date" id="rp-date" required>
+      </label>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="rp-cancel">Cancel</button>
+        <button type="submit" class="btn btn-danger">Retire</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add bye week modal -->
+<div class="modal-backdrop hidden" id="add-byeweek-backdrop">
+  <div class="modal">
+    <form id="add-byeweek-form">
+      <h3>Add Bye Week</h3>
+      <p class="modal-help">Marks a week where no tournament is played. Rankings still "publish" for that week — old results keep aging out of the 52-week window, and the week becomes selectable for seeding a future draw — just nothing new gets added.</p>
+      <label>Week (any date in it)
+        <input type="date" id="bw-date" required>
+      </label>
+      <label>Note <span style="text-transform:none; font-weight:400;">(optional)</span>
+        <input type="text" id="bw-note" maxlength="60" placeholder="e.g. Off week before the majors">
+      </label>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="bw-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Bye Week</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Bulk add players modal -->
+<div class="modal-backdrop hidden" id="bulk-add-backdrop">
+  <div class="modal">
+    <form id="bulk-add-form">
+      <h3>Bulk Add Players</h3>
+      <p class="modal-help">One player per line: <code>Name, COU</code>. The country code is optional but powers the flag — use a 2 or 3-letter code (e.g. ESP, KEN, JPN, US).</p>
+      <textarea id="ba-textarea" rows="10" placeholder="Amara Solis, KEN&#10;Priya Nandan, IND&#10;Elin Kask, EST&#10;Noor Al-Fahad"></textarea>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="ba-cancel">Close</button>
+        <button type="submit" class="btn btn-primary">Add Players</button>
+        <span class="form-msg" id="ba-msg"></span>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add tournament modal -->
+<div class="modal-backdrop hidden" id="add-tournament-backdrop">
+  <div class="modal">
+    <form id="add-tournament-form">
+      <h3>Add Tournament</h3>
+      <label>Name
+        <input type="text" id="at-name" required maxlength="60" placeholder="e.g. Palmwood Open">
+      </label>
+      <label>Location <span style="text-transform:none; font-weight:400;">(optional)</span>
+        <input type="text" id="at-location" maxlength="80" placeholder="e.g. Melbourne, Australia">
+      </label>
+      <div class="field-row">
+        <label>Level
+          <select id="at-level">
+            <option value="GRAND_SLAM">Grand Slam</option>
+            <option value="WTA1000">WATP 1000</option>
+            <option value="WTA500" selected>WATP 500</option>
+            <option value="WTA250">WATP 250</option>
+            <option value="CHALLENGER125">WATP Challenger 125</option>
+            <option value="CHALLENGER100">WATP Challenger 100</option>
+            <option value="OLYMPICS">Summer Olympics</option>
+            <option value="FINALS">WATP Finals (Round Robin)</option>
+          </select>
+        </label>
+        <label>Surface
+          <select id="at-surface">
+            <option value="hard">Hard</option>
+            <option value="clay">Clay</option>
+            <option value="grass">Grass</option>
+          </select>
+        </label>
+      </div>
+      <label>Start date
+        <input type="date" id="at-date" required>
+      </label>
+      <label class="walkover-check">
+        <input type="checkbox" id="at-twoweeks">
+        Runs 2 weeks (no new rankings publish mid-event — flagship Slams/1000s)
+      </label>
+      <p class="modal-help hidden" id="at-finals-note">WATP Finals is a fixed 8-player, 2-group round robin plus a 4-player knockout — draw size and qualifying don't apply. You'll assign the two groups from the tournament's own page.</p>
+      <div id="at-normal-fields">
+      <label>Draw size
+        <select id="at-drawsize">
+          <option value="28">28</option>
+          <option value="30">30</option>
+          <option value="32" selected>32</option>
+          <option value="48">48</option>
+          <option value="56">56</option>
+          <option value="64">64</option>
+          <option value="96">96</option>
+          <option value="128">128</option>
+        </select>
+      </label>
+      <label class="walkover-check">
+        <input type="checkbox" id="at-qual-enabled"> Include a qualifying draw
+      </label>
+      <div class="field-row hidden" id="at-qual-fields">
+        <label>Qualifiers to main draw
+          <select id="at-qual-numqualifiers">
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8" selected>8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12">12</option>
+            <option value="13">13</option>
+            <option value="14">14</option>
+            <option value="15">15</option>
+            <option value="16">16</option>
+          </select>
+        </label>
+        <label>Qualifying rounds
+          <select id="at-qual-numrounds">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+          </select>
+        </label>
+      </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="at-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Tournament</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="wrap footer-row">
+    <span class="footer-note">All data lives in this browser only — nothing is sent anywhere. Export a backup occasionally in case this browser's data ever gets cleared.</span>
+    <div class="footer-actions">
+      <button class="btn btn-small btn-ghost" id="export-data">Export Backup (.json)</button>
+      <button class="btn btn-small btn-ghost" id="import-data-trigger">Import Backup</button>
+      <input type="file" id="import-data-input" accept="application/json,.json" class="hidden">
+      <button class="btn btn-small btn-danger" id="reset-all-data">Reset All Tour Data</button>
+    </div>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
