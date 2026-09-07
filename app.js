@@ -6,13 +6,13 @@ const STORAGE_KEY = "fortnight-wta-state-v1";
 const ROUND_ORDER = ["R128","R64","R32","R16","QF","SF","F"];
 const ROUND_LABELS = {R128:"R128", R64:"R64", R32:"R32", R16:"R16", QF:"QF", SF:"SF", F:"F", Q1:"Q1", Q2:"Q2", Q3:"Q3", BRONZE:"Bronze"};
 const FRIENDLY_ROUND_NAMES = {R128:"Round of 128", R64:"Round of 64", R32:"Round of 32", R16:"Round of 16", QF:"Quarterfinals", SF:"Semifinals", F:"Final"};
-const LEVEL_LABELS = {GRAND_SLAM:"Grand Slam", WTA1000:"WATP 1000", WTA500:"WATP 500", WTA250:"WATP 250", CHALLENGER125:"WATP Challenger 125", CHALLENGER100:"WATP Challenger 100", OLYMPICS:"Summer Olympics", FINALS:"WATP Finals"};
-const LEVEL_TAG_CLASSES = {GRAND_SLAM:"level-grandslam", FINALS:"level-finals", WTA1000:"level-1000", WTA500:"level-500", WTA250:"level-250", CHALLENGER125:"level-challenger", CHALLENGER100:"level-challenger", OLYMPICS:"level-olympics"};
+const LEVEL_LABELS = {GRAND_SLAM:"Grand Slam", WTA1000:"WATP 1000", WTA500:"WATP 500", WTA250:"WATP 250", CHALLENGER125:"WATP Challenger 125", CHALLENGER100:"WATP Challenger 100", CHALLENGER75:"WATP Challenger 75", OLYMPICS:"Summer Olympics", FINALS:"WATP Finals"};
+const LEVEL_TAG_CLASSES = {GRAND_SLAM:"level-grandslam", FINALS:"level-finals", WTA1000:"level-1000", WTA500:"level-500", WTA250:"level-250", CHALLENGER125:"level-challenger", CHALLENGER100:"level-challenger", CHALLENGER75:"level-challenger", OLYMPICS:"level-olympics"};
 // Highest prestige first — used to order same-week tournaments on the
 // calendar (Grand Slam/Finals at the top, Challengers at the bottom),
 // rather than a plain alphabetical list where a 250 could sit above a Slam
 // just because its name comes first in the alphabet.
-const LEVEL_SORT_ORDER = ["GRAND_SLAM", "FINALS", "OLYMPICS", "WTA1000", "WTA500", "WTA250", "CHALLENGER125", "CHALLENGER100"];
+const LEVEL_SORT_ORDER = ["GRAND_SLAM", "FINALS", "OLYMPICS", "WTA1000", "WTA500", "WTA250", "CHALLENGER125", "CHALLENGER100", "CHALLENGER75"];
 function levelSortRank(level){
   const idx = LEVEL_SORT_ORDER.indexOf(level);
   return idx === -1 ? LEVEL_SORT_ORDER.length : idx;
@@ -46,6 +46,9 @@ const DEFAULT_POINTS_CONFIG = {
   ],
   CHALLENGER100: [
     {minDraw:0, maxDraw:9999, points:{R128:0, R64:0, R32:0, R16:8, QF:18, SF:35, F:60, W:100}, qual:{Q:2, Q2:0, Q1:0}}
+  ],
+  CHALLENGER75: [
+    {minDraw:0, maxDraw:9999, points:{R128:0, R64:0, R32:0, R16:6, QF:13, SF:25, F:45, W:75}, qual:{Q:1, Q2:0, Q1:0}}
   ],
   // There's still a real bronze medal match between the two semifinal
   // losers — it's just not treated as worth more or less than an ordinary
@@ -110,7 +113,7 @@ function getPointsBracket(level, drawSize){
 // same way qualifying matches already are. Head-to-head and the plain
 // match-history lists are deliberately left alone — those are meant to be
 // a complete log of every match played, not a tour-level stat.
-const CHALLENGER_LEVELS = new Set(["CHALLENGER125", "CHALLENGER100"]);
+const CHALLENGER_LEVELS = new Set(["CHALLENGER125", "CHALLENGER100", "CHALLENGER75"]);
 function isTourLevelMatch(m){
   if((m.bracket || "main") === "qual") return false;
   const t = tournamentById(m.tournamentId);
@@ -1133,20 +1136,32 @@ function resultColorClass(entry){
   return "res-early";
 }
 
+// Every Challenger tier folds into one "WATP Challenger" group in the
+// expanded ranking breakdown — a player who's played a 125, a 100, and a
+// 75 shouldn't get three separate single-tournament headers cluttering
+// the row; they all belong under the same umbrella. Every other level
+// still gets its own individual header, unchanged.
+function breakdownGroupKey(level){
+  return CHALLENGER_LEVELS.has(level) ? "CHALLENGER" : level;
+}
+function breakdownGroupLabel(groupKey){
+  return groupKey === "CHALLENGER" ? "WATP Challenger" : LEVEL_LABELS[groupKey];
+}
+
 function renderBreakdownTableHTML(playerId, asOfMs){
   const {entries, totalPoints} = computePlayerResultBreakdown(playerId, asOfMs);
   if(entries.length === 0){
     return '<p class="picker-empty-note">No results in this window yet.</p>';
   }
-  const levels = ["GRAND_SLAM", "OLYMPICS", "WTA1000", "WTA500", "WTA250", "CHALLENGER125", "CHALLENGER100", "FINALS"];
+  const levels = ["GRAND_SLAM", "OLYMPICS", "WTA1000", "WTA500", "WTA250", "CHALLENGER", "FINALS"];
   const byLevel = {};
-  levels.forEach(l => { byLevel[l] = entries.filter(e => e.level === l); });
+  levels.forEach(l => { byLevel[l] = entries.filter(e => breakdownGroupKey(e.level) === l); });
 
   let headTop = "", headSub = "";
   levels.forEach(l => {
     const list = byLevel[l];
     if(list.length === 0) return;
-    headTop += '<th colspan="' + list.length + '" class="breakdown-group-head">' + LEVEL_LABELS[l] + '</th>';
+    headTop += '<th colspan="' + list.length + '" class="breakdown-group-head">' + breakdownGroupLabel(l) + '</th>';
     list.forEach(e => {
       headSub += '<th title="' + escapeHtml(e.tournamentName) + '">' + escapeHtml(abbreviateTournamentName(e.tournamentName)) + '</th>';
     });
@@ -4413,7 +4428,8 @@ const FIELD_GEN_WEIGHT_BANDS = {
   WTA500:  [{maxRank:20, weight:3}, {maxRank:60, weight:8}, {maxRank:100, weight:5}, {maxRank:150, weight:2}, {maxRank:Infinity, weight:0.5}],
   WTA250:  [{maxRank:20, weight:1}, {maxRank:50, weight:3}, {maxRank:100, weight:6}, {maxRank:200, weight:8}, {maxRank:Infinity, weight:3}],
   CHALLENGER125: [{maxRank:40, weight:0.5}, {maxRank:80, weight:2}, {maxRank:150, weight:6}, {maxRank:350, weight:10}, {maxRank:Infinity, weight:4}],
-  CHALLENGER100: [{maxRank:50, weight:0.3}, {maxRank:100, weight:1}, {maxRank:200, weight:5}, {maxRank:400, weight:10}, {maxRank:Infinity, weight:6}]
+  CHALLENGER100: [{maxRank:50, weight:0.3}, {maxRank:100, weight:1}, {maxRank:200, weight:5}, {maxRank:400, weight:10}, {maxRank:Infinity, weight:6}],
+  CHALLENGER75: [{maxRank:60, weight:0.2}, {maxRank:120, weight:0.8}, {maxRank:250, weight:5}, {maxRank:450, weight:10}, {maxRank:Infinity, weight:8}]
 };
 function fieldGenWeight(level, rank){
   const bands = FIELD_GEN_WEIGHT_BANDS[level] || FIELD_GEN_WEIGHT_BANDS.WTA250;
