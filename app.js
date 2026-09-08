@@ -3044,9 +3044,11 @@ function closeBracket(){
 
 /* ---------------- Tournament History (all editions of one name) ---------------- */
 let currentTourneyHistoryName = null;
+let tourneyHistoryEditingName = false;
 function openTournamentHistory(name){
   closePlayerModal();
   currentTourneyHistoryName = name;
+  tourneyHistoryEditingName = false;
   $all(".tab").forEach(tab => tab.classList.remove("active"));
   $all(".view").forEach(v => v.classList.add("hidden"));
   $("#view-tourney-history").classList.remove("hidden");
@@ -3054,7 +3056,45 @@ function openTournamentHistory(name){
 }
 function closeTournamentHistory(){
   currentTourneyHistoryName = null;
+  tourneyHistoryEditingName = false;
   switchView("tournaments");
+}
+
+// Renaming here renames every edition sharing this name at once — the
+// whole point of this page is that it's the one place representing every
+// year's edition as a single event, so the name change should apply the
+// same way. Tournaments are referenced everywhere else by id, not name, so
+// nothing else needs updating — the calendar, search, and every other
+// view that groups by name just pick the new one up next time they render.
+function handleSaveTournamentHistoryName(){
+  const input = $("#tourney-history-name-input");
+  if(!input) return;
+  const oldName = currentTourneyHistoryName;
+  const newName = input.value.trim();
+  if(!newName){
+    tourneyHistoryEditingName = false;
+    renderTournamentHistoryPage(oldName);
+    return;
+  }
+  if(newName === oldName){
+    tourneyHistoryEditingName = false;
+    renderTournamentHistoryPage(oldName);
+    return;
+  }
+  const collides = state.tournaments.some(t => t.name === newName);
+  if(collides && !confirm('A tournament named "' + newName + '" already exists. Renaming will merge this event\'s whole history into that one. Continue?')){
+    return;
+  }
+  state.tournaments.forEach(t => { if(t.name === oldName) t.name = newName; });
+  saveState();
+  currentTourneyHistoryName = newName;
+  tourneyHistoryEditingName = false;
+  renderTournamentHistoryPage(newName);
+  renderTournaments();
+}
+function handleCancelTournamentHistoryName(){
+  tourneyHistoryEditingName = false;
+  renderTournamentHistoryPage(currentTourneyHistoryName);
 }
 
 function renderTournamentHistoryPage(name){
@@ -3069,14 +3109,36 @@ function renderTournamentHistoryPage(name){
 
   const head = $("#tourney-history-head");
   head.innerHTML = "";
+  let titleArea;
+  if(tourneyHistoryEditingName){
+    const nameInput = el("input", {type:"text", id:"tourney-history-name-input", value:name, style:"font-size:20px; font-weight:600; padding:4px 8px;"});
+    nameInput.addEventListener("keydown", (e) => {
+      if(e.key === "Enter") handleSaveTournamentHistoryName();
+      else if(e.key === "Escape") handleCancelTournamentHistoryName();
+    });
+    titleArea = el("div", {class:"field-row", style:"align-items:flex-end; margin-bottom:2px;"}, [
+      nameInput,
+      el("button", {type:"button", class:"btn btn-primary btn-small", id:"tourney-history-save-name"}, ["Save"]),
+      el("button", {type:"button", class:"btn btn-ghost btn-small", id:"tourney-history-cancel-name"}, ["Cancel"])
+    ]);
+  } else {
+    titleArea = el("div", {style:"display:flex; align-items:center; gap:10px;"}, [
+      el("h2", {}, [name]),
+      el("button", {type:"button", class:"btn btn-small btn-ghost", id:"tourney-history-edit-name-btn"}, ["Edit Name"])
+    ]);
+  }
   head.appendChild(el("div", {}, [
-    el("h2", {}, [name]),
+    titleArea,
     el("div", {class:"profile-meta"}, [
       (firstYear === lastYear ? String(firstYear) : firstYear + "\u2013" + lastYear) +
       " \u00b7 " + editions.length + " edition" + (editions.length === 1 ? "" : "s") +
       " \u00b7 most recently " + (LEVEL_LABELS[latest.level] || latest.level) + " on " + latest.surface
     ])
   ]));
+  if(tourneyHistoryEditingName){
+    const nameInputEl = $("#tourney-history-name-input");
+    if(nameInputEl){ nameInputEl.focus(); nameInputEl.select(); }
+  }
 
   const body = $("#tourney-history-body");
   body.innerHTML = "";
@@ -6566,6 +6628,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if(bracketBtn){ openBracket(bracketBtn.dataset.openBracket); return; }
     const tourneyHistBtn = e.target.closest("[data-open-tourney-history]");
     if(tourneyHistBtn){ openTournamentHistory(tourneyHistBtn.dataset.openTourneyHistory); return; }
+    const editNameBtn = e.target.closest("#tourney-history-edit-name-btn");
+    if(editNameBtn){ tourneyHistoryEditingName = true; renderTournamentHistoryPage(currentTourneyHistoryName); return; }
+    const saveNameBtn = e.target.closest("#tourney-history-save-name");
+    if(saveNameBtn){ handleSaveTournamentHistoryName(); return; }
+    const cancelNameBtn = e.target.closest("#tourney-history-cancel-name");
+    if(cancelNameBtn){ handleCancelTournamentHistoryName(); return; }
     const editTBtn = e.target.closest("[data-edit-tournament]");
     if(editTBtn){ openEditTournament(editTBtn.dataset.editTournament); return; }
     const delTBtn = e.target.closest("[data-delete-tournament]");
