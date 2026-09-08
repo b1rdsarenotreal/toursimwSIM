@@ -5462,6 +5462,69 @@ function renderRecords(){
 }
 
 /* ---------------- History view ---------------- */
+/* ---------------- Win-Loss Records ---------------- */
+function populateWLRecordsYearSelect(){
+  const sel = $("#wl-records-year");
+  const current = sel.value;
+  const seasons = getSeasons();
+  sel.innerHTML = '<option value="career">Career</option>' +
+    seasons.map(y => '<option value="' + y + '">' + y + '</option>').join("");
+  if(current && (current === "career" || seasons.includes(Number(current)))){
+    sel.value = current;
+  } else {
+    sel.value = "career";
+  }
+}
+
+// One pass over every tour-level match (qualifying and Challenger-tier
+// excluded, same convention as career win-loss everywhere else in the app)
+// accumulating win/loss counts per player, rather than looping every
+// player against the full match list — with ~600+ players this keeps it
+// fast regardless of dataset size.
+function renderWLRecords(){
+  populateWLRecordsYearSelect();
+  const yearFilter = $("#wl-records-year").value;
+  const surfaceFilter = $("#wl-records-surface").value;
+
+  const statsByPlayer = new Map();
+  state.matches.forEach(m => {
+    if(!isTourLevelMatch(m)) return;
+    const t = tournamentById(m.tournamentId);
+    if(!t) return;
+    if(yearFilter !== "career" && String(t.year) !== yearFilter) return;
+    if(surfaceFilter !== "all" && t.surface !== surfaceFilter) return;
+    if(!m.playerAId || !m.playerBId || !m.winnerId) return;
+    if(!statsByPlayer.has(m.playerAId)) statsByPlayer.set(m.playerAId, {w:0, l:0});
+    if(!statsByPlayer.has(m.playerBId)) statsByPlayer.set(m.playerBId, {w:0, l:0});
+    const loserId = m.playerAId === m.winnerId ? m.playerBId : m.playerAId;
+    statsByPlayer.get(m.winnerId).w++;
+    statsByPlayer.get(loserId).l++;
+  });
+
+  const rows = Array.from(statsByPlayer.entries())
+    .map(([pid, stats]) => ({pid, player: playerById(pid), w: stats.w, l: stats.l, total: stats.w + stats.l}))
+    .filter(r => r.player && r.total > 0)
+    // Most wins first; among equal win totals, the better win% breaks the tie.
+    .sort((a,b) => b.w - a.w || (b.w/b.total) - (a.w/a.total));
+
+  const empty = $("#wl-records-empty");
+  const table = $("#wl-records-table");
+  empty.classList.toggle("hidden", rows.length > 0);
+  table.classList.toggle("hidden", rows.length === 0);
+
+  const body = $("#wl-records-body");
+  body.innerHTML = rows.map((r, i) => {
+    const pct = ((r.w / r.total) * 100).toFixed(1);
+    return '<tr>' +
+      '<td>' + (i+1) + '</td>' +
+      '<td>' + playerLinkHTML(r.player) + '</td>' +
+      '<td>' + r.w + '</td>' +
+      '<td>' + r.l + '</td>' +
+      '<td>' + pct + '%</td>' +
+      '</tr>';
+  }).join("");
+}
+
 /* ---------------- Grand Slam History ---------------- */
 // Cumulative QF/SF/F/W appearances, either across every Grand Slam
 // (majorName === null) or scoped to one specific major by name.
@@ -6262,13 +6325,14 @@ function switchView(view){
   // The dropdown toggle itself has no data-view (it just opens the menu),
   // so it needs its own check — it should read as "active" whenever any of
   // its three sub-pages is the one currently showing.
-  $("#records-dropdown-toggle").classList.toggle("active", view === "records" || view === "rank-history" || view === "slams" || view === "thousands");
+  $("#records-dropdown-toggle").classList.toggle("active", view === "records" || view === "wl-records" || view === "rank-history" || view === "slams" || view === "thousands");
   $all(".view").forEach(v => v.classList.toggle("hidden", v.id !== "view-" + view));
   if(view !== "tourney-history") currentTourneyHistoryName = null;
   if(view === "rankings") renderRankings();
   if(view === "players") renderPlayers();
   if(view === "tournaments") renderTournaments();
   if(view === "records") renderRecords();
+  if(view === "wl-records") renderWLRecords();
   if(view === "rank-history") renderRankHistoryPage();
   if(view === "slams") renderGrandSlamHistory();
   if(view === "thousands") renderThousandsHistory();
@@ -6356,6 +6420,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   $("#rankings-year").addEventListener("change", renderRankings);
+  $("#wl-records-year").addEventListener("change", renderWLRecords);
+  $("#wl-records-surface").addEventListener("change", renderWLRecords);
 
   $("#open-add-player").addEventListener("click", openAddPlayer);
   $("#header-add-player").addEventListener("click", openAddPlayer);

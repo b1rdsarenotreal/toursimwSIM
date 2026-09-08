@@ -28,6 +28,7 @@
         <button class="tab dropdown-toggle" id="records-dropdown-toggle" type="button">Records &#9662;</button>
         <div class="dropdown-menu hidden" id="records-dropdown-menu">
           <button class="tab dropdown-item" data-view="records">Overall Records</button>
+          <button class="tab dropdown-item" data-view="wl-records">Win-Loss Records</button>
           <button class="tab dropdown-item" data-view="rank-history">Ranking History</button>
           <button class="tab dropdown-item" data-view="slams">Slam History</button>
           <button class="tab dropdown-item" data-view="thousands">WATP 1000 History</button>
@@ -224,6 +225,38 @@
         <tr><th>No.</th><th>Player</th><th>Start date</th><th>End date</th><th>Weeks</th><th>Total</th></tr>
       </thead>
       <tbody id="rh-no1-body"></tbody>
+    </table>
+  </section>
+
+  <!-- WIN-LOSS RECORDS -->
+  <section class="view hidden" id="view-wl-records">
+    <div class="view-head">
+      <h2>Win-Loss Records</h2>
+    </div>
+    <p class="rankings-rule-note">Tour-level results only — qualifying and Challenger-tier matches aren't counted, same as career win-loss elsewhere in the app.</p>
+    <div class="controls">
+      <label>Year
+        <select id="wl-records-year">
+          <option value="career">Career</option>
+        </select>
+      </label>
+      <label>Surface
+        <select id="wl-records-surface">
+          <option value="all">All Surfaces</option>
+          <option value="hard">Hard</option>
+          <option value="clay">Clay</option>
+          <option value="grass">Grass</option>
+        </select>
+      </label>
+    </div>
+    <div id="wl-records-empty" class="empty hidden">
+      <p>No results yet for this filter.</p>
+    </div>
+    <table class="data-table" id="wl-records-table">
+      <thead>
+        <tr><th>#</th><th>Player</th><th>W</th><th>L</th><th>Win %</th></tr>
+      </thead>
+      <tbody id="wl-records-body"></tbody>
     </table>
   </section>
 
