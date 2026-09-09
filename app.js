@@ -4972,8 +4972,8 @@ function buildSlotRow(slot, m, which, t){
 const SIM_POINTS_ELO_SCALE = 2.5;      // operates on log10(points) — bigger = points gaps matter less
 const SIM_SURFACE_SCALE = 1.2;         // converts a surface win% delta into an equivalent log-points shift
 const SIM_H2H_SCALE = 0.5;             // how much the head-to-head delta can shift the final probability
-const SIM_MIN_PROB = 0.03;             // nobody is ever a true lock...
-const SIM_MAX_PROB = 0.97;             // ...or a true impossibility
+const SIM_MIN_PROB = 0.06;             // nobody is ever a true lock...
+const SIM_MAX_PROB = 0.94;             // ...or a true impossibility
 const SIM_PEAK_HALF_LIFE_MONTHS = 12;  // how fast a rank peak's pull fades with time
 const SIM_SURFACE_WINDOW_DAYS = 364;   // "recent" surface form uses the same rolling window rankings do
 
