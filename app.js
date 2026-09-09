@@ -5463,6 +5463,9 @@ function renderRecords(){
 
 /* ---------------- History view ---------------- */
 /* ---------------- Win-Loss Records ---------------- */
+const WL_RECORDS_COLUMNS = [["player", "Player"], ["wins", "W"], ["losses", "L"], ["winpct", "Win %"]];
+let wlRecordsSort = {col: "wins", dir: "desc"};
+
 function populateWLRecordsYearSelect(){
   const sel = $("#wl-records-year");
   const current = sel.value;
@@ -5480,7 +5483,9 @@ function populateWLRecordsYearSelect(){
 // excluded, same convention as career win-loss everywhere else in the app)
 // accumulating win/loss counts per player, rather than looping every
 // player against the full match list — with ~600+ players this keeps it
-// fast regardless of dataset size.
+// fast regardless of dataset size. The table itself is click-sortable by
+// Player, W, L, or Win % — reuses the same sortable-th pattern the Finals
+// History table already established.
 function renderWLRecords(){
   populateWLRecordsYearSelect();
   const yearFilter = $("#wl-records-year").value;
@@ -5504,17 +5509,44 @@ function renderWLRecords(){
   const rows = Array.from(statsByPlayer.entries())
     .map(([pid, stats]) => ({pid, player: playerById(pid), w: stats.w, l: stats.l, total: stats.w + stats.l}))
     .filter(r => r.player && r.total > 0)
-    // Most wins first; among equal win totals, the better win% breaks the tie.
-    .sort((a,b) => b.w - a.w || (b.w/b.total) - (a.w/a.total));
+    .map(r => ({...r, pct: r.w / r.total}));
+
+  const sortValue = (row, col) => {
+    switch(col){
+      case "player": return row.player.name.toLowerCase();
+      case "wins": return row.w;
+      case "losses": return row.l;
+      case "winpct": return row.pct;
+      default: return 0;
+    }
+  };
+  rows.sort((a,b) => {
+    const av = sortValue(a, wlRecordsSort.col), bv = sortValue(b, wlRecordsSort.col);
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    // Ties fall back to most wins first, then better win% — keeps the
+    // ranking stable and meaningful no matter which column is sorted.
+    const tiebreak = cmp !== 0 ? cmp : (b.w - a.w || b.pct - a.pct);
+    return wlRecordsSort.dir === "asc" ? tiebreak : -tiebreak;
+  });
 
   const empty = $("#wl-records-empty");
   const table = $("#wl-records-table");
   empty.classList.toggle("hidden", rows.length > 0);
   table.classList.toggle("hidden", rows.length === 0);
 
+  const thead = $("#wl-records-thead");
+  let headHTML = '<tr><th>#</th>';
+  WL_RECORDS_COLUMNS.forEach(([key, label]) => {
+    const isActive = wlRecordsSort.col === key;
+    const arrow = isActive ? (wlRecordsSort.dir === "asc" ? " \u25b2" : " \u25bc") : ' <span class="sort-hint">\u21c5</span>';
+    headHTML += '<th class="sortable-th' + (isActive ? " sort-active" : "") + '" data-wl-sort-col="' + key + '">' + label + arrow + '</th>';
+  });
+  headHTML += '</tr>';
+  thead.innerHTML = headHTML;
+
   const body = $("#wl-records-body");
   body.innerHTML = rows.map((r, i) => {
-    const pct = ((r.w / r.total) * 100).toFixed(1);
+    const pct = (r.pct * 100).toFixed(1);
     return '<tr>' +
       '<td>' + (i+1) + '</td>' +
       '<td>' + playerLinkHTML(r.player) + '</td>' +
@@ -5981,6 +6013,7 @@ function openH2HPopup(idA, idB){
       const t = tournamentById(m.tournamentId);
       const winner = playerById(m.winnerId);
       const row = el("div", {class:"tourney-row"}, [
+        el("span", {class:"match-round"}, [ROUND_LABELS[m.round] || m.round]),
         el("span", {class:"tourney-name"}, [t ? (t.name + " '" + String(t.year).slice(-2)) : ""]),
         el("span", {class:"tourney-champ", html: (winner ? playerLinkHTML(winner) : "(unknown)") + " won"}),
         el("span", {html: renderScoreboardHTML(m)})
@@ -6676,6 +6709,17 @@ document.addEventListener("DOMContentLoaded", () => {
         finalsHistorySort = {col, dir: "desc"};
       }
       if(profileYearFilterPlayerId) renderPlayerProfile(profileYearFilterPlayerId);
+      return;
+    }
+    const wlSortTh = e.target.closest("[data-wl-sort-col]");
+    if(wlSortTh){
+      const col = wlSortTh.dataset.wlSortCol;
+      if(wlRecordsSort.col === col){
+        wlRecordsSort.dir = wlRecordsSort.dir === "asc" ? "desc" : "asc";
+      } else {
+        wlRecordsSort = {col, dir: "desc"};
+      }
+      renderWLRecords();
       return;
     }
     const slamSortTh = e.target.closest("[data-slam-sort-col]");
