@@ -5486,10 +5486,12 @@ function populateWLRecordsYearSelect(){
 // fast regardless of dataset size. The table itself is click-sortable by
 // Player, W, L, or Win % — reuses the same sortable-th pattern the Finals
 // History table already established.
+const WL_RECORDS_MIN_MATCHES = 12;
 function renderWLRecords(){
   populateWLRecordsYearSelect();
   const yearFilter = $("#wl-records-year").value;
   const surfaceFilter = $("#wl-records-surface").value;
+  const minMatchesOn = $("#wl-records-minmatches").checked;
 
   const statsByPlayer = new Map();
   state.matches.forEach(m => {
@@ -5509,6 +5511,7 @@ function renderWLRecords(){
   const rows = Array.from(statsByPlayer.entries())
     .map(([pid, stats]) => ({pid, player: playerById(pid), w: stats.w, l: stats.l, total: stats.w + stats.l}))
     .filter(r => r.player && r.total > 0)
+    .filter(r => !minMatchesOn || r.total >= WL_RECORDS_MIN_MATCHES)
     .map(r => ({...r, pct: r.w / r.total}));
 
   const sortValue = (row, col) => {
@@ -6455,6 +6458,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#rankings-year").addEventListener("change", renderRankings);
   $("#wl-records-year").addEventListener("change", renderWLRecords);
   $("#wl-records-surface").addEventListener("change", renderWLRecords);
+  $("#wl-records-minmatches").addEventListener("change", renderWLRecords);
 
   $("#open-add-player").addEventListener("click", openAddPlayer);
   $("#header-add-player").addEventListener("click", openAddPlayer);
