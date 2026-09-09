@@ -182,30 +182,107 @@ function playerLinkHTML(player){
 }
 
 /* ---------------- Storage ---------------- */
-function loadState(){
+// ---------------- Persistence: IndexedDB (with one-time localStorage migration) ----------------
+// This app's data grows every session (more players, tournaments, results)
+// and localStorage tops out around 5-10MB depending on the browser -- once
+// a save gets big enough, writes start silently failing. IndexedDB has a
+// vastly larger quota (typically hundreds of MB+), so it's the right home
+// for this. The whole state object is still kept as one plain in-memory
+// JS object exactly as before -- every other function in this app reads
+// and writes `state.players`/`state.tournaments`/etc. synchronously and
+// none of that changes. Only how it gets PERSISTED changes: loadState is
+// now async (awaited once at startup, before anything renders) and
+// saveState is now async internally, but every existing call site that
+// just does `saveState();` without awaiting still works exactly the same
+// -- the write just happens in the background. The only places that need
+// the save to have actually finished before doing something else (import,
+// reset) now `await` it explicitly.
+const IDB_DB_NAME = "fortnight-watp-db";
+const IDB_STORE_NAME = "state-store";
+let idbDbPromise = null;
+function idbOpen(){
+  if(idbDbPromise) return idbDbPromise;
+  idbDbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_DB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(IDB_STORE_NAME)){
+        db.createObjectStore(IDB_STORE_NAME);
+      }
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+  return idbDbPromise;
+}
+async function idbGet(key){
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE_NAME, "readonly");
+    const req = tx.objectStore(IDB_STORE_NAME).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSet(key, value){
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE_NAME, "readwrite");
+    tx.objectStore(IDB_STORE_NAME).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+async function idbDelete(key){
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE_NAME, "readwrite");
+    tx.objectStore(IDB_STORE_NAME).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+function normalizeLoadedState(parsed){
+  return {
+    players: (parsed && parsed.players) || [],
+    tournaments: (parsed && parsed.tournaments) || [],
+    matches: (parsed && parsed.matches) || [],
+    byeWeeks: (parsed && parsed.byeWeeks) || [],
+    pointsConfig: (parsed && parsed.pointsConfig) || undefined
+  };
+}
+async function loadState(){
   try{
+    const fromIdb = await idbGet(STORAGE_KEY);
+    if(fromIdb) return normalizeLoadedState(fromIdb);
+
+    // Nothing in IndexedDB yet -- this is either a first run, or a browser
+    // that still has everything sitting in localStorage from before this
+    // migration. Reading localStorage never hits the quota (only writing
+    // NEW/bigger data does), so whatever was already saved there is still
+    // safely readable; pull it in once and carry it over.
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return {players:[], tournaments:[], matches:[], byeWeeks:[]};
     const parsed = JSON.parse(raw);
-    return {
-      players: parsed.players || [],
-      tournaments: parsed.tournaments || [],
-      matches: parsed.matches || [],
-      byeWeeks: parsed.byeWeeks || []
-    };
+    const normalized = normalizeLoadedState(parsed);
+    try{ await idbSet(STORAGE_KEY, normalized); }
+    catch(migrateErr){ console.error("Migrated localStorage data into memory but couldn't write it to IndexedDB yet; it will save normally on the next change.", migrateErr); }
+    return normalized;
   }catch(e){
     console.error("Failed to load state, starting fresh.", e);
     return {players:[], tournaments:[], matches:[], byeWeeks:[]};
   }
 }
-function saveState(){
+async function saveState(){
   rankingsAsOfCache.clear();
   officialRanksAsOfCache.clear();
   tournamentResultsCache.clear();
   qualifyingResultsCache.clear();
   tournamentPointsContributionCache.clear();
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    await idbSet(STORAGE_KEY, state);
   }catch(e){
     console.error("Failed to save state", e);
     alert("Couldn't save — your browser storage may be full or blocked.");
@@ -259,7 +336,11 @@ function migrateTournamentSeasonYears(){
   if(changed) saveState();
 }
 
-let state = loadState();
+// Initialized synchronously to a safe empty default so the variable exists
+// immediately; the DOMContentLoaded handler below awaits the real,
+// persisted state (from IndexedDB, or migrated from localStorage) and
+// reassigns this BEFORE any rendering or event wiring happens.
+let state = {players:[], tournaments:[], matches:[], byeWeeks:[]};
 
 function uid(prefix){
   return prefix + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -6400,7 +6481,7 @@ function handleImportFileSelected(e){
   const file = e.target.files[0];
   if(!file) return;
   const reader = new FileReader();
-  reader.onload = (ev) => {
+  reader.onload = async (ev) => {
     let parsed;
     try{
       parsed = JSON.parse(ev.target.result);
@@ -6425,16 +6506,20 @@ function handleImportFileSelected(e){
     state = {
       players: payload.players,
       tournaments: payload.tournaments,
-      matches: payload.matches
+      matches: payload.matches,
+      byeWeeks: payload.byeWeeks || [],
+      pointsConfig: payload.pointsConfig || undefined
     };
-    saveState();
+    await saveState();
     location.reload();
   };
   reader.readAsText(file);
 }
 
 /* ---------------- Wire up events ---------------- */
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  state = await loadState();
+
   migrateLegacyGsRoundCodes();
   migrateTournamentSeasonYears();
 
@@ -6760,11 +6845,12 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#import-data-trigger").addEventListener("click", () => $("#import-data-input").click());
   $("#import-data-input").addEventListener("change", handleImportFileSelected);
 
-  $("#reset-all-data").addEventListener("click", () => {
+  $("#reset-all-data").addEventListener("click", async () => {
     const summary = state.players.length + " players, " + state.tournaments.length +
       " tournaments, and " + state.matches.length + " results";
     if(confirm("This permanently deletes everything — " + summary + ". This can't be undone. Continue?")){
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_KEY); // clears any leftover pre-migration copy too
+      try{ await idbDelete(STORAGE_KEY); }catch(e){ console.error("Failed to clear IndexedDB", e); }
       location.reload();
     }
   });
