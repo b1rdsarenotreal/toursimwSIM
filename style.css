@@ -1030,11 +1030,11 @@ form textarea{
 .score-inline .set-num{
   position: relative;
   font-family:'JetBrains Mono', monospace;
-  font-size: 8px;
+  font-size: 10.5px;
   color: var(--ink-soft);
   border: 1px solid var(--line);
   border-radius: 2px;
-  padding: 1px 3px;
+  padding: 1.5px 4px;
   line-height: 1.4;
 }
 .score-inline .set-num.won{
@@ -1043,13 +1043,13 @@ form textarea{
   border-color: var(--ink);
 }
 .score-inline .sb-tb-inline{
-  font-size: 6px;
+  font-size: 8px;
   margin-left: 1px;
   color: var(--ink-soft);
 }
 .score-inline.wo-tag{
   font-family:'JetBrains Mono', monospace;
-  font-size: 8px;
+  font-size: 10.5px;
   font-style: italic;
   color: var(--ink-soft);
 }
