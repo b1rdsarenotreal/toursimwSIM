@@ -5116,8 +5116,25 @@ function pickSimSetScore(setWinnerProb){
 // win the first two sets outright, or win exactly one of the first two and
 // then the decider. Used to invert a desired MATCH-level probability back
 // into the per-set probability that actually produces it.
+// Which matches play best-of-5 when a tournament has that option enabled —
+// scoped to the main draw's QF/SF/F, matching what "best of 5 from the
+// quarterfinals on" actually means. Qualifying rounds are named Q1/Q2/Q3
+// (never QF/SF/F) so this naturally never touches them, and WATP Finals'
+// round robin/knockout rounds use their own separate naming too.
+const BEST_OF_5_ROUNDS = new Set(["QF", "SF", "F"]);
+function isBestOf5Match(t, round, bracketType){
+  return !!(t && t.bestOf5FromQF) && bracketType === "main" && BEST_OF_5_ROUNDS.has(round);
+}
+
 function bestOf3MatchProbFromSetProb(setProb){
   return setProb * setProb + 2 * setProb * setProb * (1 - setProb);
+}
+
+// First to 3 of up to 5 sets: win in exactly 3, 4, or 5 sets.
+// P = p^3 + C(3,1)*p^3*q + C(4,2)*p^3*q^2 = p^3 * (1 + 3q + 6q^2)
+function bestOf5MatchProbFromSetProb(setProb){
+  const p = setProb, q = 1 - setProb;
+  return p*p*p * (1 + 3*q + 6*q*q);
 }
 
 // Best-of-3 amplifies whatever per-set edge a player has — winning 2 of 3
@@ -5126,35 +5143,40 @@ function bestOf3MatchProbFromSetProb(setProb){
 // directly as each set's probability would make every simulated match
 // more lopsided than intended (verified directly: a target of 0.75 came
 // out as an actual 0.84 empirical win rate before this fix). Binary
-// search inverts it — finds the per-set probability that, run through the
-// best-of-3 formula above, actually reproduces the intended match-level
-// probability.
-function invertMatchProbToSetProb(targetMatchProb){
-  if(targetMatchProb < 0.5) return 1 - invertMatchProbToSetProb(1 - targetMatchProb);
+// search inverts it — finds the per-set probability that, run through
+// whichever match-format formula applies, actually reproduces the
+// intended match-level probability. Best-of-5 amplifies even more than
+// best-of-3 (one extra set of "insurance" for the stronger player), so it
+// needs the same inversion against its own formula, not best-of-3's.
+function invertMatchProbToSetProb(targetMatchProb, formulaFn){
+  formulaFn = formulaFn || bestOf3MatchProbFromSetProb;
+  if(targetMatchProb < 0.5) return 1 - invertMatchProbToSetProb(1 - targetMatchProb, formulaFn);
   let lo = 0.5, hi = 1.0;
   for(let i = 0; i < 40; i++){
     const mid = (lo + hi) / 2;
-    if(bestOf3MatchProbFromSetProb(mid) < targetMatchProb) lo = mid; else hi = mid;
+    if(formulaFn(mid) < targetMatchProb) lo = mid; else hi = mid;
   }
   return (lo + hi) / 2;
 }
 
-// Best-of-3, set by set — each set independently uses the per-set
-// probability that correctly reproduces the intended overall MATCH
-// probability (see invertMatchProbToSetProb above), not the match
+// Set by set — each set independently uses the per-set probability that
+// correctly reproduces the intended overall MATCH probability for whichever
+// format applies (see invertMatchProbToSetProb above), not the match
 // probability itself.
-function simulateMatchScoreline(probA){
-  const setProbA = invertMatchProbToSetProb(probA);
+function simulateMatchScoreline(probA, bestOf5){
+  const formulaFn = bestOf5 ? bestOf5MatchProbFromSetProb : bestOf3MatchProbFromSetProb;
+  const setsToWin = bestOf5 ? 3 : 2;
+  const setProbA = invertMatchProbToSetProb(probA, formulaFn);
   const sets = [];
   let setsA = 0, setsB = 0;
-  while(setsA < 2 && setsB < 2){
+  while(setsA < setsToWin && setsB < setsToWin){
     const aWinsSet = Math.random() < setProbA;
     const setWinnerProb = aWinsSet ? setProbA : (1 - setProbA);
     const [winGames, loseGames] = pickSimSetScore(setWinnerProb);
     if(aWinsSet){ sets.push({a: winGames, b: loseGames}); setsA++; }
     else{ sets.push({a: loseGames, b: winGames}); setsB++; }
   }
-  return {aWinsMatch: setsA === 2, sets};
+  return {aWinsMatch: setsA === setsToWin, sets};
 }
 
 // Runs the whole pipeline for one match and saves it exactly the way a
@@ -5166,7 +5188,8 @@ function simulateAndPersistMatch(t, m, bracketType){
   const idA = m.slotA.playerId, idB = m.slotB.playerId;
   const asOfMs = tournamentDateMs(t);
   const probA = simulateMatchProbability(idA, idB, t.surface, asOfMs);
-  const {aWinsMatch, sets} = simulateMatchScoreline(probA);
+  const bestOf5 = isBestOf5Match(t, m.round, bracketType || "main");
+  const {aWinsMatch, sets} = simulateMatchScoreline(probA, bestOf5);
   const winnerId = aWinsMatch ? idA : idB;
   persistMatchResult(t, m, winnerId, sets, false, bracketType || "main");
 }
@@ -5248,10 +5271,13 @@ function buildBronzeMatchCard(t, m){
 }
 
 function buildBracketEntryForm(t, m){
+  const bestOf5 = isBestOf5Match(t, m.round, "main");
+  const numSetBoxes = bestOf5 ? 5 : 3;
+  const setsToWin = bestOf5 ? 3 : 2;
   const form = el("div", {class:"bracket-match-form"});
   const setRow = el("div", {class:"bracket-sets-row"});
   const setInputs = [];
-  for(let i = 1; i <= 3; i++){
+  for(let i = 1; i <= numSetBoxes; i++){
     const box = el("div", {class:"set-box"});
     box.appendChild(el("span", {}, ["S" + i]));
     const inner = el("div", {style:"display:flex;gap:2px;"});
@@ -5274,7 +5300,8 @@ function buildBracketEntryForm(t, m){
   form.appendChild(errMsg);
 
   // No submit button — the winner is read off as soon as someone has taken
-  // 2 of the (up to) 3 sets entered. Click either name above for a walkover.
+  // enough sets (2 of up to 3, or 3 of up to 5 for a best-of-5 QF/SF/F).
+  // Click either name above for a walkover.
   function evaluateAndMaybeSave(){
     errMsg.textContent = "";
     let sets = [];
@@ -5289,7 +5316,7 @@ function buildBracketEntryForm(t, m){
     if(sets.length === 0) return;
     let aSets = 0, bSets = 0;
     sets.forEach(s => { if(s.a > s.b) aSets++; else bSets++; });
-    if(aSets < 2 && bSets < 2) return; // not decided yet
+    if(aSets < setsToWin && bSets < setsToWin) return; // not decided yet
     persistMatchResult(t, m, aSets > bSets ? m.slotA.playerId : m.slotB.playerId, sets, false, "main");
   }
 
@@ -6340,6 +6367,7 @@ function handleAddTournament(ev){
   if(!name || !startDate) return;
   const location = $("#at-location").value.trim();
   const twoWeeks = $("#at-twoweeks").checked;
+  const bestOf5FromQF = $("#at-bestof5qf").checked;
   const year = computeTournamentSeasonYear(new Date(startDate + "T00:00:00").getTime(), twoWeeks ? 14 : 7);
   const level = $("#at-level").value;
   const surface = $("#at-surface").value;
@@ -6347,7 +6375,7 @@ function handleAddTournament(ev){
   if(level === "FINALS"){
     state.tournaments.push({
       id: uid("t"), name, location, level, surface, year, startDate, drawSize: 8,
-      twoWeeks,
+      twoWeeks, bestOf5FromQF,
       bracketEntries: [], seeds: [], unseededEntrants: [],
       qualifying: {enabled:false, numQualifiers:8, numRounds:2, entrants:[], bracketEntries:[]},
       groups: [{id:"A", name:"Group A", playerIds:[]}, {id:"B", name:"Group B", playerIds:[]}],
@@ -6365,7 +6393,7 @@ function handleAddTournament(ev){
   const qualRounds = Number($("#at-qual-numrounds").value) || 2;
   state.tournaments.push({
     id: uid("t"), name, location, level, surface, year, startDate, drawSize,
-    twoWeeks,
+    twoWeeks, bestOf5FromQF,
     bracketEntries: new Array(capacityOf(drawSize)).fill(0).map(() => ({type:"empty"})),
     seeds: new Array(numSeedsFor(drawSize)).fill(null),
     unseededEntrants: [],
@@ -6393,6 +6421,7 @@ function openEditTournament(id){
   $("#et-surface").value = t.surface;
   $("#et-date").value = t.startDate || "";
   $("#et-twoweeks").checked = !!t.twoWeeks;
+  $("#et-bestof5qf").checked = !!t.bestOf5FromQF;
   $("#edit-tournament-backdrop").classList.remove("hidden");
 }
 function closeEditTournament(){
@@ -6412,6 +6441,7 @@ function handleEditTournament(ev){
   t.surface = $("#et-surface").value;
   t.startDate = startDate;
   t.twoWeeks = $("#et-twoweeks").checked;
+  t.bestOf5FromQF = $("#et-bestof5qf").checked;
   t.year = computeTournamentSeasonYear(new Date(startDate + "T00:00:00").getTime(), t.twoWeeks ? 14 : 7);
   saveState();
   closeEditTournament();

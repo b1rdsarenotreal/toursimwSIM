@@ -1030,11 +1030,11 @@ form textarea{
 .score-inline .set-num{
   position: relative;
   font-family:'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--ink-soft);
   border: 1px solid var(--line);
   border-radius: 2px;
-  padding: 1px 4px;
+  padding: 2px 5px;
   line-height: 1.4;
 }
 .score-inline .set-num.won{
@@ -1043,13 +1043,13 @@ form textarea{
   border-color: var(--ink);
 }
 .score-inline .sb-tb-inline{
-  font-size: 8px;
+  font-size: 9px;
   margin-left: 1px;
   color: var(--ink-soft);
 }
 .score-inline.wo-tag{
   font-family:'JetBrains Mono', monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-style: italic;
   color: var(--ink-soft);
 }
@@ -1162,7 +1162,7 @@ form textarea{
 .name-link{cursor: pointer;}
 .name-link:hover{text-decoration: underline;}
 .bracket-match-form{padding: 7px; border-top: 1px dashed var(--line);}
-.bracket-sets-row{display:flex; align-items:flex-end; gap:4px; margin-bottom:5px;}
+.bracket-sets-row{display:flex; align-items:flex-end; gap:4px; margin-bottom:5px; flex-wrap:wrap;}
 .bracket-sets-row .set-box{width: 48px; padding: 3px;}
 .bracket-sets-row .set-box span{font-size:8px;}
 .bracket-sets-row .set-box input{padding:2px 2px; font-size:11px;}
