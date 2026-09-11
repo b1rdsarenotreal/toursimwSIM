@@ -3525,11 +3525,13 @@ function groupStandingsHTML(t, g){
   return html;
 }
 
-function buildFinalsScoreForm(onSave){
+function buildFinalsScoreForm(onSave, bestOf5){
+  const numSetBoxes = bestOf5 ? 5 : 3;
+  const setsToWin = bestOf5 ? 3 : 2;
   const form = el("div", {class:"bracket-match-form"});
   const setRow = el("div", {class:"bracket-sets-row"});
   const setInputs = [];
-  for(let i = 1; i <= 3; i++){
+  for(let i = 1; i <= numSetBoxes; i++){
     const box = el("div", {class:"set-box"});
     box.appendChild(el("span", {}, ["S" + i]));
     const inner = el("div", {style:"display:flex;gap:2px;"});
@@ -3557,7 +3559,7 @@ function buildFinalsScoreForm(onSave){
     if(sets.length === 0) return;
     let aSets = 0, bSets = 0;
     sets.forEach(s => { if(s.a > s.b) aSets++; else bSets++; });
-    if(aSets < 2 && bSets < 2) return;
+    if(aSets < setsToWin && bSets < setsToWin) return;
     onSave(aSets > bSets, sets);
   }
   setInputs.forEach(pair => {
@@ -3579,10 +3581,10 @@ function buildRRMatchCard(t, g, slotIdx, pair){
     const badge = seedNum ? '<span class="seed-badge">' + seedNum + '</span>' : "";
     const row = el("div", {class:"bracket-slot" + (isWinner ? " slot-winner" : "")});
     row.appendChild(el("span", {class:"slot-name", html: badge + (p ? playerLinkHTML(p) : "?")}));
+    if(existingMatch && p) row.appendChild(el("span", {html: slotScoreHTML(existingMatch, pid)}));
     names.appendChild(row);
   });
   body.appendChild(names);
-  if(existingMatch) body.appendChild(el("div", {class:"bracket-match-score", html: renderScoreboardHTML(existingMatch)}));
   card.appendChild(body);
 
   if(!existingMatch && pair[0] && pair[1]){
@@ -3633,10 +3635,10 @@ function buildKnockoutMatchCard(t, round, slot, pidA, pidB){
     const badge = seedNum ? '<span class="seed-badge">' + seedNum + '</span>' : "";
     const row = el("div", {class:"bracket-slot" + (isWinner ? " slot-winner" : "")});
     row.appendChild(el("span", {class:"slot-name", html: p ? (badge + playerLinkHTML(p)) : "TBD"}));
+    if(existingMatch && p) row.appendChild(el("span", {html: slotScoreHTML(existingMatch, pid)}));
     names.appendChild(row);
   });
   body.appendChild(names);
-  if(existingMatch) body.appendChild(el("div", {class:"bracket-match-score", html: renderScoreboardHTML(existingMatch)}));
   card.appendChild(body);
 
   if(!existingMatch && pidA && pidB){
@@ -3664,6 +3666,7 @@ function buildKnockoutMatchCard(t, round, slot, pidA, pidB){
     });
     card.appendChild(clearX);
   } else if(pA && pB){
+    const bestOf5 = isBestOf5Match(t, round, "main");
     card.appendChild(buildFinalsScoreForm((aWon, sets) => {
       state.matches.push({
         id: uid("m"), tournamentId: t.id, bracket:"main", round, slot,
@@ -3673,7 +3676,7 @@ function buildKnockoutMatchCard(t, round, slot, pidA, pidB){
       saveState();
       renderFinalsDraw(t);
       renderRankings();
-    }));
+    }, bestOf5));
   } else {
     card.appendChild(el("p", {class:"picker-empty-note", style:"padding:8px 10px;"}, ["Waiting on the group stage."]));
   }
